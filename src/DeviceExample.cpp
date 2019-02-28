@@ -1,24 +1,47 @@
 #include <TinyGPS++.h>
-#include <SoftwareSerial.h>
+#include <Arduino.h>
+#include "wiring_private.h"
+//#include <SoftwareSerial.h>
+
+void displayInfo();
+
 /*
    This sample sketch demonstrates the normal use of a TinyGPS++ (TinyGPSPlus) object.
    It requires the use of SoftwareSerial, and assumes that you have a
    4800-baud serial GPS device hooked up on pins 4(rx) and 3(tx).
 */
-static const int RXPin = 4, TXPin = 3;
-static const uint32_t GPSBaud = 4800;
+static const int PIN_RX_GPS = 30, PIN_TX_GPS = 19;
+static const int PIN_RX_S6C = 1, PIN_TX_S6C = 4;
+static const uint32_t GPSBaud = 9600;
 
 // The TinyGPS++ object
 TinyGPSPlus gps;
 
 // The serial connection to the GPS device
-SoftwareSerial ss(RXPin, TXPin);
+Uart SerialGPS(&sercom5, PIN_RX_GPS, PIN_TX_GPS, SERCOM_RX_PAD_2, UART_TX_PAD_0);
+Uart SerialS6C(&sercom0, PIN_RX_GPS, PIN_TX_GPS, SERCOM_RX_PAD_2, UART_TX_PAD_0);
+
+void SERCOM5_Handler(void) {
+  SerialGPS.IrqHandler();
+}
+
+void SERCOM0_Handler(void) {
+  SerialS6C.IrqHandler();
+}
 
 void setup()
 {
-  Serial.begin(115200);
-  ss.begin(GPSBaud);
+  pinPeripheral(PIN_RX_GPS, PIO_SERCOM_ALT);
+  pinPeripheral(PIN_TX_GPS, PIO_SERCOM_ALT);
 
+  pinPeripheral(PIN_RX_S6C, PIO_SERCOM_ALT);
+  pinPeripheral(PIN_TX_S6C, PIO_SERCOM_ALT);
+
+  Serial.begin(115200);
+  SerialGPS.begin(GPSBaud);
+  SerialS6C.begin(9600);
+  
+  delay(10000);
   Serial.println(F("DeviceExample.ino"));
   Serial.println(F("A simple demonstration of TinyGPS++ with an attached GPS module"));
   Serial.print(F("Testing TinyGPS++ library v. ")); Serial.println(TinyGPSPlus::libraryVersion());
@@ -29,15 +52,23 @@ void setup()
 void loop()
 {
   // This sketch displays information every time a new sentence is correctly encoded.
-  while (ss.available() > 0)
-    if (gps.encode(ss.read()))
+  if (SerialGPS.available() > 0) {
+    if (gps.encode(SerialGPS.read())) {
       displayInfo();
-
-  if (millis() > 5000 && gps.charsProcessed() < 10)
-  {
-    Serial.println(F("No GPS detected: check wiring."));
-    while(true);
+      delay(50);
+    }
   }
+
+  if (SerialS6C.available() > 0) {
+    Serial.write(SerialS6C.read());
+  }
+    
+
+  // if (millis() > 5000 && gps.charsProcessed() < 10)
+  // {
+  //   Serial.println(F("No GPS detected: check wiring."));
+  //   while(true);
+  // }
 }
 
 void displayInfo()
